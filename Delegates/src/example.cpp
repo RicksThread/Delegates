@@ -18,6 +18,16 @@ public:
 	{
 		std::cout << "A called! public var x: " << x << "\n";
 	}
+
+	float StrangeOp(float abc, float d)
+	{
+		return x + abc * d;
+	}
+
+	float StrangeOp2(float abc, float d)
+	{
+		return (x + abc * d) * 2;
+	}
 };
 
 class B
@@ -40,6 +50,7 @@ public:
 
 float Sum(float a, float b)
 {
+
 	return a + b;
 }
 
@@ -96,8 +107,17 @@ int main()
 	multiFuncs.Remove(&A::foo, a);
 	std::cout << "\n\n======MULTICAST DELEGATE (minus a func.)======\n\n";
 	multiFuncs.Invoke(53);
+	
 
-	//the return value is taken from the last method called
+	std::cout << "\n\n======MULTICAST DELEGATE (return type float)======\n\n";
+	MultiCastDelegate<float, float, float> ops;
+	ops.Add(&A::StrangeOp, a);
+	ops.Add(&A::StrangeOp2, a);
+	ops.Add(&Sum);
 
+	//it calls the methods starting from the member functions and then global functions
+	//the return value is taken from the last method added
+	float dest = ops.Invoke(4, 6);
+	std::cout << "result: " << dest << "\n\n\n";
 	return 0;
 }

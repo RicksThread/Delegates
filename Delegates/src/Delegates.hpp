@@ -60,7 +60,7 @@ namespace DelegateSystem
     public:
 
         using rBaseMemberDelegate = BaseMemberDelegate<T, R, Params...>;
-        using func_type = void(T::*)(Params...);
+        using func_type = R(T::*)(Params...);
 
         Delegate(func_type func, T& callee) : rBaseMemberDelegate(func, callee) {}
 
