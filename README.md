@@ -1,0 +1,2 @@
+# Delegates
+Delegates in c# are a very powerful tool in making programs as they can handle multiple pointers to functions, member functions and lambdas (anonymous functions). They can be used as events that are invoked in certain events and call all of the methods inside stored. Since cpp doesn't have any native application of it i decided to try and create my own version of it (for learning purposes)
