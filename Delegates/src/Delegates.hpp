@@ -3,7 +3,7 @@
 #include <vector>
 #include <memory>
 
-namespace ClusterEngine
+namespace DelegateSystem
 {
     class Converter
     {
@@ -20,7 +20,6 @@ namespace ClusterEngine
         }
     };
 
-
     template<typename R, typename... Params>
     class IDelegate
     {
@@ -30,6 +29,7 @@ namespace ClusterEngine
          * @param args parameters of the array of functions
          */
         virtual R Invoke(Params... args) = 0;
+        virtual ~IDelegate() {}
     };
 
     template <typename T, typename R, typename... Params>
@@ -37,6 +37,8 @@ namespace ClusterEngine
     {
     public:
         typedef R(T::* func_type)(Params...);
+
+        BaseMemberDelegate() = delete;
 
         BaseMemberDelegate(func_type func, T& callee)
             : callee_(callee)
@@ -92,6 +94,7 @@ namespace ClusterEngine
         using rIDelegate = IDelegate< R, Params...>;
         using func_type = R(*)(Params...);
 
+        BaseGlobalDelegate() = delete;
         BaseGlobalDelegate(func_type func) : func_(func), rIDelegate() {}
 
 
@@ -113,6 +116,7 @@ namespace ClusterEngine
         using rBaseGlobalDelegate = BaseGlobalDelegate< R, Params...>;
         using func_type = R(*)(Params...);
 
+        Delegate() = delete;
         Delegate(func_type func) : rBaseGlobalDelegate(func) {}
 
         /**
@@ -129,6 +133,7 @@ namespace ClusterEngine
         using rBaseGlobalDelegate = BaseGlobalDelegate<void, Params...>;
         using func_type = void(*)(Params...);
 
+        Delegate() = delete;
         Delegate(func_type func) : rBaseGlobalDelegate(func) {}
 
         /**

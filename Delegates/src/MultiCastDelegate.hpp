@@ -1,9 +1,9 @@
 #pragma once
-#include "Delegates.h"
+#include "Delegates.hpp"
 #include <unordered_map>
 #include <functional>
 
-namespace ClusterEngine
+namespace DelegateSystem
 {
     template <typename R, typename... Params>
     class MultiCastDelegate;
@@ -13,6 +13,8 @@ namespace ClusterEngine
     {
         using rIDelegate = IDelegate<R, Params...>;
         using GlobalFunc = R(*)(Params...);
+        template<typename T>
+        using MemberFunc = R(T::*)(Params...);
     public:
 
         MultiCastDelegateBase();
@@ -22,7 +24,7 @@ namespace ClusterEngine
          * @param func The function to add from the register
          */
         template<class T>
-        void Add(R(T::* func)(Params...), T& caller);
+        void Add(MemberFunc<T> func, T& caller);
 
         /**
          * Adds the given pointer to member function
@@ -35,7 +37,7 @@ namespace ClusterEngine
          * @param func The function to remove from the register
          */
         template<class T>
-        void Remove(R(T::* func)(Params...), T& caller);
+        void Remove(MemberFunc<T> func, T& caller);
 
         /**
          * Removes the given pointer to global function
@@ -44,6 +46,10 @@ namespace ClusterEngine
         void Remove(GlobalFunc func);
 
         virtual R Invoke(Params... args) = 0;
+
+        bool operator ==(const MultiCastDelegateBase<R, Params...>& other) const;
+
+        bool operator !=(const MultiCastDelegateBase<R, Params...>& other) const;
 
         void Clear();
 
@@ -56,19 +62,30 @@ namespace ClusterEngine
     protected:
 
         /**
-         * holds an array of functions of the same type
+         * holds an array of func
          */
-        class MemberFunc
+        struct MemberFuncs
         {
         public:
-            //address of function and array of functions of the same adress (example: same function registered multiple times)
-            std::unordered_map<void*, std::vector<std::unique_ptr<rIDelegate>> > functions;
+            struct Func
+            {
+                //interface function pointer
+                std::unique_ptr<rIDelegate> iDelegate;
+
+                //number of times the same function has been registered
+                int amount;
+
+                Func() {}
+                Func(rIDelegate*& del) : iDelegate(std::unique_ptr<rIDelegate>(del)), amount(1) {}
+            };
+            //address of functions adress and delegates
+            std::unordered_map<void*, Func> functions;
         };
 
         //global funcs (key 1: address of function, key 2: function)
         std::unordered_map< void*, std::vector<std::unique_ptr<rIDelegate>> > globalFuncs;
         //member funcs (key 1: address of callee; key 2: member function)
-        std::unordered_map< void*, MemberFunc > memberFuncs;
+        std::unordered_map< void*, MemberFuncs > memberFuncs;
 
         typedef std::function<void(rIDelegate*)> ForeachFunc;
 
@@ -115,7 +132,7 @@ namespace ClusterEngine
     MultiCastDelegateBase<R, Params...>::MultiCastDelegateBase() : rIDelegate() {}
 
     template <typename R, typename... Params> template <class T>
-    void MultiCastDelegateBase<R, Params...>::Add(R(T::* func)(Params...), T& caller)
+    void MultiCastDelegateBase<R, Params...>::Add(MemberFunc<T> func, T& caller)
     {
         //for more readability
         using std::pair;
@@ -139,26 +156,22 @@ namespace ClusterEngine
             //if the function is already present then add only the interface delegate
             if (memberFuncs[addressCaller].functions.count(addressFunc))
             {
-                memberFuncs[addressCaller].functions[addressFunc].push_back(unique_ptr<rIDelegate>(iDelegate));
+                memberFuncs[addressCaller].functions[addressFunc].amount++;
             }
             else
             {
                 //insert the new function address
-                memberFuncs[addressCaller].functions.insert(pair< void*, vector<unique_ptr<rIDelegate>>>(addressFunc, 0));
-                memberFuncs[addressCaller].functions[addressFunc].push_back(unique_ptr<rIDelegate>(iDelegate));
+                memberFuncs[addressCaller].functions.insert(pair< void*, MemberFuncs::Func>(addressFunc, MemberFuncs::Func(iDelegate)));
             }
         }
         else
         {
-            //insert the new caller address and new function address
-
-            //insert caller
-            memberFuncs.insert(pair<void*, MemberFunc>(addressCaller, MemberFunc()));
+            //insert callers' address
+            memberFuncs.insert(pair<void*, MemberFuncs>(addressCaller, MemberFuncs()));
 
             //insert function address
-            memberFuncs[addressCaller].functions.insert(pair< void*, vector<unique_ptr<rIDelegate>>>(addressFunc, 0));
             //insert function content (delegate interface)
-            memberFuncs[addressCaller].functions[addressFunc].push_back(unique_ptr<rIDelegate>(iDelegate));
+            memberFuncs[addressCaller].functions.insert(pair< void*, MemberFuncs::Func>(addressFunc, MemberFuncs::Func(iDelegate)));
         }
     }
 
@@ -187,7 +200,7 @@ namespace ClusterEngine
     }
 
     template<typename R, typename... Params> template<class T>
-    void MultiCastDelegateBase<R, Params...>::Remove(R(T::* func)(Params...), T& caller)
+    void MultiCastDelegateBase<R, Params...>::Remove(MemberFunc<T> func, T& caller)
     {
         void* funcAdress = Converter::ForceToVoid<R(T::*)(Params...)>(func);
         void* callerAdress = &caller;
@@ -195,7 +208,10 @@ namespace ClusterEngine
         if (!memberFuncs.count(callerAdress)) return;
         if (!memberFuncs[callerAdress].functions.count(funcAdress)) return;
 
-        memberFuncs[callerAdress].functions[funcAdress].erase(memberFuncs[callerAdress].functions[funcAdress].begin());
+        memberFuncs[callerAdress].functions[funcAdress].amount--;
+
+        if (memberFuncs[callerAdress].functions[funcAdress].amount <= 0) 
+            memberFuncs[callerAdress].functions.erase(funcAdress);
     }
 
     template<typename R, typename... Params>
@@ -223,13 +239,48 @@ namespace ClusterEngine
         {
             for (const auto& j : i.second.functions)
             {
-                for (const auto& k : j.second)
+                for (int k = 0; k < j.second.amount; ++k)
                 {
-                    lambda(k.get());
+                    lambda(j.second.iDelegate.get());
                 }
             }
         }
     }
+
+    template<typename R, typename... Params>
+    bool MultiCastDelegateBase<R, Params...>::operator ==(const MultiCastDelegateBase<R, Params...>& other) const
+    {
+        if (globalFuncs.size() != other.globalFuncs.size()) return false;
+        if (memberFuncs.size() != other.memberFuncs.size()) return false;
+        //checking member functions
+        for (const auto& memberFunc : memberFuncs)
+        {
+            //check if the other doesn't have as a caller a member function
+            if (!other.memberFuncs.count(memberFunc.first)) return false;
+            //if it does have one then check the size
+            if (other.memberFuncs.at(memberFunc.first).functions.size() != memberFunc.second.functions.size()) return false;
+
+            for (const auto& func : memberFunc.second.functions)
+            {
+                if (!other.memberFuncs.at(memberFunc.first).functions.count(func.first)) return false;
+                if (other.memberFuncs.at(memberFunc.first).functions.at(func.first).amount != func.second.amount) return false;
+            }
+        }
+
+        for (const auto& func : globalFuncs)
+        {
+            if (!other.globalFuncs.count(func.first)) return false;
+        }
+
+        return true;
+    }
+
+    template<typename R, typename... Params>
+    bool MultiCastDelegateBase<R, Params...>::operator !=(const MultiCastDelegateBase<R, Params...>& other) const
+    {
+        return !(*this == other);
+    }
+
 
     template<typename R, typename... Params>
     void MultiCastDelegateBase<R, Params...>::Clear()
@@ -243,7 +294,7 @@ namespace ClusterEngine
     {
         return GetMemberMethodsN() + GetGlobalMethodsN();
     }
-    
+
     template<typename R, typename... Params>
     int MultiCastDelegateBase<R, Params...>::GetMemberMethodsN() const
     {
