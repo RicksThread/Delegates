@@ -3,6 +3,10 @@
 #include <vector>
 #include <memory>
 
+#ifndef ADRESS
+#define ADDRESS void*
+#endif
+
 namespace DelegateSystem
 {
     class Converter
@@ -14,9 +18,9 @@ namespace DelegateSystem
          * @return object's address
          */
         template<typename T>
-        static void* ForceToVoid(T object) noexcept
+        static ADDRESS ForceToVoid(T object) noexcept
         {
-            return (void*&)object;
+            return (ADDRESS&)object;
         }
     };
 

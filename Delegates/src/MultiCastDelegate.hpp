@@ -4,9 +4,10 @@
 #include <functional>
 #include <unordered_set>
 
+
+
 namespace DelegateSystem
 {
-
     template <typename R, typename... Params>
     class MultiCastDelegate;
 
@@ -73,15 +74,15 @@ namespace DelegateSystem
 
         std::vector<Func> funcs;
 
-        std::map<std::pair<void*,void*>, int> funcsIndex;
+        std::map<std::pair<ADDRESS, ADDRESS>, int> funcsIndex;
 
         std::unordered_set<int> deletedFuncsIndex;
 
         typedef std::function<void(rIDelegate*)> ForeachFunc;
 
         void ForEachFunc(ForeachFunc lambda);
-        void Add(std::pair<void*, void*>& fullAdress, rIDelegate*& del);
-        void Remove(std::pair<void*, void*>& fullAdress);
+        void Add(std::pair<ADDRESS, ADDRESS>& fullAdress, rIDelegate*& del);
+        void Remove(std::pair<ADDRESS, ADDRESS>& fullAdress);
     };
 
     template <typename R, typename... Params>
@@ -134,15 +135,15 @@ namespace DelegateSystem
         using rDelegate = Delegate<T, R, Params...>;
 
         //takes the address of the caller and function
-        void* addressCaller = &caller;
-        void* addressFunc = Converter::ForceToVoid<R(T::*)(Params...)>(func);
+        ADDRESS addressCaller = &caller;
+        ADDRESS addressFunc = Converter::ForceToVoid<R(T::*)(Params...)>(func);
 
         //create a delegate to hold the pointer and caller and convert it to a delegate interface
         //the multicast delegate doesn't have to remember the caller so it must be reinterpreted to an interface delegate so that the method call can still happen
         rDelegate* funcHolder = new rDelegate(func, caller);
         rIDelegate* iDelegate = reinterpret_cast<rIDelegate*>(funcHolder);
 
-        std::pair<void*, void*> fullAdress(addressCaller, addressFunc);
+        std::pair<ADDRESS, ADDRESS> fullAdress(addressCaller, addressFunc);
 
         Add(fullAdress, iDelegate);
     }
@@ -155,12 +156,12 @@ namespace DelegateSystem
         using std::vector;
         using DelegateGlobalFunc = Delegate<void, R, Params...>;
 
-        void* adress = Converter::ForceToVoid(globalFunc);
+        ADDRESS address = Converter::ForceToVoid(globalFunc);
 
         DelegateGlobalFunc* funcHolder = new DelegateGlobalFunc(globalFunc);
         rIDelegate* iDelegate = reinterpret_cast<rIDelegate*>(funcHolder);
 
-        std::pair<void*, void*> fullAdress(nullptr, adress);
+        std::pair<ADDRESS, ADDRESS> fullAdress(nullptr, address);
 
         Add(fullAdress, iDelegate);
     }
@@ -168,10 +169,10 @@ namespace DelegateSystem
     template<typename R, typename... Params> template<class T>
     void MultiCastDelegateBase<R, Params...>::Remove(MemberFunc<T> func, T& caller)
     {
-        void* funcAdress = Converter::ForceToVoid<R(T::*)(Params...)>(func);
-        void* callerAdress = &caller;
+        ADDRESS funcAdress = Converter::ForceToVoid<R(T::*)(Params...)>(func);
+        ADDRESS callerAdress = &caller;
 
-        std::pair<void*, void*> fullAdress(callerAdress, funcAdress);
+        std::pair<ADDRESS, ADDRESS> fullAdress(callerAdress, funcAdress);
 
         Remove(fullAdress);
     }
@@ -179,13 +180,13 @@ namespace DelegateSystem
     template<typename R, typename... Params>
     void MultiCastDelegateBase<R, Params...>::Remove(GlobalFunc func)
     {
-        void* funcAddress = Converter::ForceToVoid<R(*)(Params...)>(func);
-        std::pair<void*, void*> fullAdress(nullptr, funcAddress);
+        ADDRESS funcAddress = Converter::ForceToVoid<R(*)(Params...)>(func);
+        std::pair<ADDRESS, ADDRESS> fullAdress(nullptr, funcAddress);
         Remove(fullAdress);
     }
 
     template<typename R, typename... Params>
-    void MultiCastDelegateBase<R, Params...>::Add(std::pair<void*, void*>& fullAdress, rIDelegate*& del)
+    void MultiCastDelegateBase<R, Params...>::Add(std::pair<ADDRESS, ADDRESS>& fullAdress, rIDelegate*& del)
     {
         if (funcsIndex.count(fullAdress))
         {
@@ -209,7 +210,7 @@ namespace DelegateSystem
         }
     }
     template<typename R, typename... Params>
-    void MultiCastDelegateBase<R, Params...>::Remove(std::pair<void*, void*>& fullAdress)
+    void MultiCastDelegateBase<R, Params...>::Remove(std::pair<ADDRESS, ADDRESS>& fullAdress)
     {
         if (!funcsIndex.count(fullAdress)) return;
 
